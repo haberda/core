@@ -13,8 +13,10 @@ _LOGGER = logging.getLogger(__name__)
 
 CONF_FOLDER = "folder"
 CONF_PATTERNS = "patterns"
+CONF_NAME = "name"
 DEFAULT_PATTERN = "*"
 DOMAIN = "folder_watcher"
+DEFAULT_NAME = ""
 
 CONFIG_SCHEMA = vol.Schema(
     {
@@ -24,6 +26,7 @@ CONFIG_SCHEMA = vol.Schema(
                 vol.Schema(
                     {
                         vol.Required(CONF_FOLDER): cv.isdir,
+                        vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
                         vol.Optional(CONF_PATTERNS, default=[DEFAULT_PATTERN]): vol.All(
                             cv.ensure_list, [cv.string]
                         ),
@@ -42,15 +45,16 @@ def setup(hass, config):
     for watcher in conf:
         path = watcher[CONF_FOLDER]
         patterns = watcher[CONF_PATTERNS]
+        name = watcher[CONF_NAME]
         if not hass.config.is_allowed_path(path):
             _LOGGER.error("folder %s is not valid or allowed", path)
             return False
-        Watcher(path, patterns, hass)
+        Watcher(path, patterns, name, hass)
 
     return True
 
 
-def create_event_handler(patterns, hass):
+def create_event_handler(patterns, name, hass):
     """Return the Watchdog EventHandler object."""
 
     class EventHandler(PatternMatchingEventHandler):
@@ -71,6 +75,7 @@ def create_event_handler(patterns, hass):
                     {
                         "event_type": event.event_type,
                         "path": event.src_path,
+                        "name": name,
                         "file": file_name,
                         "folder": folder,
                     },
@@ -98,11 +103,11 @@ def create_event_handler(patterns, hass):
 class Watcher:
     """Class for starting Watchdog."""
 
-    def __init__(self, path, patterns, hass):
+    def __init__(self, path, patterns, name, hass):
         """Initialise the watchdog observer."""
         self._observer = Observer()
         self._observer.schedule(
-            create_event_handler(patterns, hass), path, recursive=True
+            create_event_handler(patterns, name, hass), path, recursive=True
         )
         hass.bus.listen_once(EVENT_HOMEASSISTANT_START, self.startup)
         hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, self.shutdown)
